@@ -80,7 +80,7 @@ function Login({ onLogin }) {
   const inp = { display: "block", width: "100%", padding: "13px 16px", marginBottom: 12, fontSize: 14, background: "rgba(255,255,255,0.05)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: T.text, fontFamily: "IBM Plex Sans,system-ui,sans-serif", boxSizing: "border-box" };
 
   return (
-    <div style={{ minHeight: 640, background: `radial-gradient(ellipse at 50% -20%, rgba(200,149,42,0.1) 0%, ${T.bg} 60%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: `radial-gradient(ellipse at 50% -10%, rgba(200,149,42,0.07) 0%, ${T.bg} 50%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
       <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.3em", textTransform: "uppercase", display: "block", textAlign: "center", marginBottom: 20 }}>Restricted · Built Exclusively for Spintly</MN>
       <PD size="clamp(38px,8vw,72px)" style={{ display: "block", fontWeight: 900, lineHeight: 1, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 10, color: T.text }}>Chirag Mewara</PD>
       <div style={{ fontSize: 13, color: "#B0A898", textAlign: "center", marginBottom: 48 }}>Product Manager · Integration Builder · Domain Expert</div>
@@ -98,9 +98,14 @@ function Login({ onLogin }) {
 }
 
 function Admin({ users, onAdd, onRevoke, onClose }) {
-  const [em, setEm] = useState(""); const [last, setLast] = useState(null); const [cp, setCp] = useState(false);
+  const [em, setEm] = useState(""); const [last, setLast] = useState(null); const [cp, setCp] = useState(false); const [cl, setCl] = useState(false);
   async function add() { if (!em.trim()) return; const r = await onAdd(em.trim()); setLast({ email: em.trim(), password: r.pw }); setEm(""); }
   function copy() { navigator.clipboard.writeText(`Portfolio\nEmail: ${last.email}\nPassword: ${last.password}`); setCp(true); setTimeout(() => setCp(false), 2000); }
+  function copyLink() {
+    const token = btoa(JSON.stringify({ e: last.email, p: last.password }));
+    const link = `${window.location.origin}/#key=${token}`;
+    navigator.clipboard.writeText(link); setCl(true); setTimeout(() => setCl(false), 2000);
+  }
   const mn = { fontFamily: "IBM Plex Mono,monospace" };
   return (
     <div style={{ background: T.bg2, border: `1px solid ${T.bdr}`, borderRadius: 10, padding: 24, marginBottom: 32, fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
@@ -118,8 +123,11 @@ function Admin({ users, onAdd, onRevoke, onClose }) {
           <MN style={{ fontSize: 10, color: T.gold, display: "block", marginBottom: 8 }}>GENERATED CREDENTIALS</MN>
           <MN style={{ fontSize: 12, color: T.text, display: "block", marginBottom: 4 }}>{last.email}</MN>
           <MN style={{ fontSize: 16, color: T.goldd, fontWeight: 600, display: "block", marginBottom: 12 }}>{last.password}</MN>
-          <button onClick={copy} style={{ width: "100%", padding: "8px 0", background: cp ? "rgba(80,200,100,0.1)" : "rgba(255,255,255,0.05)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: cp ? "#70C880" : T.text, fontSize: 11, ...mn, cursor: "pointer" }}>
+          <button onClick={copy} style={{ width: "100%", padding: "8px 0", background: cp ? "rgba(80,200,100,0.1)" : "rgba(255,255,255,0.05)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: cp ? "#70C880" : T.text, fontSize: 11, ...mn, cursor: "pointer", marginBottom: 6 }}>
             {cp ? "✓ Copied" : "Copy credentials"}
+          </button>
+          <button onClick={copyLink} style={{ width: "100%", padding: "8px 0", background: cl ? "rgba(200,149,42,0.15)" : "rgba(200,149,42,0.06)", border: `1px solid ${T.bdrg}`, borderRadius: 6, color: cl ? T.goldd : T.gold, fontSize: 11, ...mn, cursor: "pointer" }}>
+            {cl ? "✓ Magic link copied" : "Copy magic link (share this)"}
           </button>
         </div>
       )}
@@ -573,7 +581,28 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [users, setUsers] = useState([]);
 
-  useEffect(() => { db.load().then(setUsers); }, []);
+  useEffect(() => {
+    let magic = null;
+    const hash = window.location.hash;
+    if (hash.startsWith("#key=")) {
+      try { magic = JSON.parse(atob(hash.slice(5))); } catch (_) {}
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    db.load().then(loaded => {
+      setUsers(loaded);
+      if (!magic) return;
+      const { e, p } = magic;
+      if (e === ADMIN_EMAIL && p === ADMIN_PASSWORD) {
+        setIsAdmin(true); setScreen("portfolio"); return;
+      }
+      let target = loaded.find(u => u.email === e && u.password === p);
+      if (!target) {
+        const up = [...loaded.filter(u => u.email !== e), { email: e, password: p, created: new Date().toISOString(), last: null }];
+        db.save(up); setUsers(up);
+      }
+      setIsAdmin(false); setScreen("portfolio");
+    });
+  }, []);
 
   function handleLogin(email, password) {
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
