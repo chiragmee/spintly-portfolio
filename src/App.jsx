@@ -83,7 +83,7 @@ function Login({ onLogin }) {
     <div style={{ minHeight: 640, background: `radial-gradient(ellipse at 50% -20%, rgba(200,149,42,0.1) 0%, ${T.bg} 60%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
       <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.3em", textTransform: "uppercase", display: "block", textAlign: "center", marginBottom: 20 }}>Restricted · Built Exclusively for Spintly</MN>
       <PD size="clamp(38px,8vw,72px)" style={{ display: "block", fontWeight: 900, lineHeight: 1, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 10, color: T.text }}>Chirag Mewara</PD>
-      <div style={{ fontSize: 13, color: T.dim, textAlign: "center", marginBottom: 48 }}>Product Manager · Integration Builder · Domain Expert</div>
+      <div style={{ fontSize: 13, color: "#B0A898", textAlign: "center", marginBottom: 48 }}>Product Manager · Integration Builder · Domain Expert</div>
       <div style={{ width: "100%", maxWidth: 320 }}>
         <input type="email" placeholder="Your email address" value={em} onChange={e => setEm(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()} style={inp} autoComplete="email" />
         <input type="password" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()} style={inp} autoComplete="current-password" />
@@ -92,7 +92,7 @@ function Login({ onLogin }) {
           {busy ? "Verifying…" : "Enter"}
         </button>
       </div>
-      <div style={{ marginTop: 48, fontSize: 11, color: "#2A2520", fontFamily: "monospace" }}>No access? chirag.mewara.18@gmail.com</div>
+      <div style={{ marginTop: 48, fontSize: 11, color: "#6A6050", fontFamily: "monospace" }}>No access? chirag.mewara.18@gmail.com</div>
     </div>
   );
 }
