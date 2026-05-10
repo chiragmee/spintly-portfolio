@@ -2,30 +2,27 @@ import { useState, useEffect } from "react";
 
 const ADMIN_EMAIL = "chirag.mewara.18@gmail.com";
 const ADMIN_PASSWORD = "Spintly@Builder25";
-const SK = "spintly_pf_v5";
+const SESSION_KEY = "spf_session";
 
-let mem = [];
-const db = {
-  async load() {
-    try { const r = localStorage.getItem(SK); if (r) mem = JSON.parse(r); } catch (_) {}
-    return [...mem];
-  },
-  async save(u) {
-    mem = u;
-    try { localStorage.setItem(SK, JSON.stringify(u)); } catch (_) {}
-  },
+const C = {
+  navy: "#0B2D6B",
+  navyDark: "#081E4A",
+  navyMid: "#1A3E8C",
+  blue: "#1A56DB",
+  orange: "#F97316",
+  white: "#FFFFFF",
+  altBg: "#F8FAFC",
+  blueTint: "#EFF6FF",
+  dark: "#0F172A",
+  muted: "#64748B",
+  border: "#E2E8F0",
+  shadowSm: "0 1px 3px rgba(0,0,0,0.08)",
+  shadowMd: "0 4px 12px rgba(0,0,0,0.08)",
 };
 
-const genPw = () => {
-  const c = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 12 }, () => c[Math.floor(Math.random() * c.length)]).join("");
-};
-
-const T = {
-  bg: "#080808", bg2: "#0D0D0D",
-  text: "#F0EBE0", dim: "#7A7060",
-  gold: "#C8952A", goldd: "#E8B84B",
-  bdr: "rgba(255,255,255,0.06)", bdrg: "rgba(200,149,42,0.2)",
+const F = {
+  sans: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+  mono: "'IBM Plex Mono','Courier New',monospace",
 };
 
 function useW() {
@@ -38,30 +35,39 @@ function useW() {
   return w;
 }
 
-const PD = ({ children, size, style = {} }) => (
-  <span style={{ fontFamily: "Playfair Display,Georgia,serif", fontSize: size, ...style }}>{children}</span>
-);
-const MN = ({ children, style = {} }) => (
-  <span style={{ fontFamily: "IBM Plex Mono,Courier New,monospace", ...style }}>{children}</span>
-);
-const Au = ({ children }) => <span style={{ color: T.gold, fontStyle: "italic" }}>{children}</span>;
-
-const Sec = ({ id, children, bg, noBorder }) => (
-  <section id={id} style={{ background: bg || T.bg, borderTop: noBorder ? "none" : `1px solid ${T.bdr}`, padding: "80px 0" }}>
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px" }}>{children}</div>
+const Sec = ({ id, children, bg, style = {} }) => (
+  <section id={id} style={{ background: bg || C.white, padding: "88px 0", ...style }}>
+    <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 24px" }}>{children}</div>
   </section>
 );
 
-const Label = ({ n, children }) => (
-  <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.28em", textTransform: "uppercase", display: "block", marginBottom: 16 }}>
-    {n && <span style={{ opacity: 0.4 }}>{n} / </span>}{children}
-  </MN>
+const Eyebrow = ({ children, color }) => (
+  <div style={{
+    fontFamily: F.mono, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase",
+    color: color || C.blue, marginBottom: 16, fontWeight: 500,
+  }}>{children}</div>
 );
 
-const ST = ({ children }) => (
-  <PD size="clamp(30px,4.5vw,52px)" style={{ display: "block", fontWeight: 900, lineHeight: 1.07, marginBottom: 56, color: T.text }}>
-    {children}
-  </PD>
+const Tag = ({ children, color, bg }) => (
+  <span style={{
+    fontFamily: F.mono, fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase",
+    color: color || C.blue, background: bg || C.blueTint,
+    padding: "4px 10px", borderRadius: 4, display: "inline-block", marginBottom: 12,
+  }}>{children}</span>
+);
+
+const Card = ({ children, style = {} }) => (
+  <div style={{
+    background: C.white, borderRadius: 12, boxShadow: C.shadowSm,
+    border: `1px solid ${C.border}`, ...style,
+  }}>{children}</div>
+);
+
+const Bullet = ({ children, color }) => (
+  <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
+    <span style={{ color: color || C.blue, flexShrink: 0, marginTop: 3, fontSize: 11 }}>→</span>
+    <span style={{ color: C.muted, fontSize: 14, lineHeight: 1.65, fontFamily: F.sans }}>{children}</span>
+  </div>
 );
 
 function Login({ onLogin }) {
@@ -70,571 +76,844 @@ function Login({ onLogin }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  function attempt() {
+  async function attempt() {
     if (!em.trim() || !pw) { setErr("Please enter your email and password."); return; }
     setBusy(true); setErr("");
-    const res = onLogin(em.trim(), pw);
-    if (!res.ok) { setErr(res.msg); setBusy(false); }
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: em.trim(), password: pw }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ role: data.role, email: em.trim() }));
+        onLogin(data.role);
+      } else {
+        setErr(data.msg || "Invalid credentials.");
+        setBusy(false);
+      }
+    } catch (_) {
+      // Local-dev fallback: no API available
+      if (em.trim() === ADMIN_EMAIL && pw === ADMIN_PASSWORD) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ role: "admin", email: em.trim() }));
+        onLogin("admin");
+      } else {
+        setErr("Invalid credentials. Contact chirag.mewara.18@gmail.com for access.");
+        setBusy(false);
+      }
+    }
   }
 
-  const inp = { display: "block", width: "100%", padding: "13px 16px", marginBottom: 12, fontSize: 14, background: "rgba(255,255,255,0.05)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: T.text, fontFamily: "IBM Plex Sans,system-ui,sans-serif", boxSizing: "border-box" };
+  const inp = {
+    display: "block", width: "100%", padding: "13px 16px", marginBottom: 12,
+    fontSize: 14, background: C.white, border: `1px solid ${C.border}`,
+    borderRadius: 8, color: C.dark, fontFamily: F.sans, boxSizing: "border-box",
+    outline: "none",
+  };
 
   return (
-    <div style={{ minHeight: "100vh", background: `radial-gradient(ellipse at 50% -10%, rgba(200,149,42,0.07) 0%, ${T.bg} 50%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
-      <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.3em", textTransform: "uppercase", display: "block", textAlign: "center", marginBottom: 20 }}>Restricted · Built Exclusively for Spintly</MN>
-      <PD size="clamp(38px,8vw,72px)" style={{ display: "block", fontWeight: 900, lineHeight: 1, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 10, color: T.text }}>Chirag Mewara</PD>
-      <div style={{ fontSize: 13, color: "#B0A898", textAlign: "center", marginBottom: 48 }}>Product Manager · Integration Builder · Domain Expert</div>
-      <div style={{ width: "100%", maxWidth: 320 }}>
-        <input type="email" placeholder="Your email address" value={em} onChange={e => setEm(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()} style={inp} autoComplete="email" />
-        <input type="password" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()} style={inp} autoComplete="current-password" />
-        {err && <div style={{ fontSize: 13, color: "#E07070", padding: "10px 14px", background: "rgba(224,112,112,0.07)", border: "1px solid rgba(224,112,112,0.15)", borderRadius: 6, marginBottom: 12 }}>{err}</div>}
-        <button onClick={attempt} disabled={busy} style={{ display: "block", width: "100%", padding: "13px 0", background: busy ? "rgba(200,149,42,0.35)" : T.gold, color: "#080808", border: "none", borderRadius: 6, fontFamily: "IBM Plex Mono,monospace", fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", cursor: "pointer" }}>
+    <div style={{
+      minHeight: "100vh", background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMid} 100%)`,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: "60px 24px", fontFamily: F.sans,
+    }}>
+      <div style={{ fontFamily: F.mono, fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: "0.28em", textTransform: "uppercase", marginBottom: 24, textAlign: "center" }}>
+        Restricted access — built exclusively for Spintly's leadership team
+      </div>
+      <div style={{ fontSize: "clamp(36px,7vw,64px)", fontWeight: 800, color: C.white, textAlign: "center", marginBottom: 10, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+        Chirag Mewara
+      </div>
+      <div style={{ fontFamily: F.mono, fontSize: 12, color: "rgba(255,255,255,0.5)", textAlign: "center", marginBottom: 48, letterSpacing: "0.1em" }}>
+        Product Strategy · Integration Leadership · Domain Expertise
+      </div>
+
+      <Card style={{ width: "100%", maxWidth: 360, padding: 32 }}>
+        <input
+          type="email" placeholder="Email address" value={em}
+          onChange={e => setEm(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()}
+          style={inp} autoComplete="email"
+        />
+        <input
+          type="password" placeholder="Password" value={pw}
+          onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()}
+          style={inp} autoComplete="current-password"
+        />
+        {err && (
+          <div style={{
+            fontSize: 13, color: "#DC2626", padding: "10px 14px",
+            background: "#FEF2F2", border: "1px solid #FECACA",
+            borderRadius: 8, marginBottom: 12, lineHeight: 1.5,
+          }}>{err}</div>
+        )}
+        <button
+          onClick={attempt} disabled={busy}
+          style={{
+            display: "block", width: "100%", padding: "13px 0",
+            background: busy ? C.muted : C.navy, color: C.white,
+            border: "none", borderRadius: 8, fontFamily: F.mono,
+            fontSize: 12, fontWeight: 600, letterSpacing: "0.16em",
+            textTransform: "uppercase", cursor: busy ? "not-allowed" : "pointer",
+          }}>
           {busy ? "Verifying…" : "Enter"}
         </button>
+      </Card>
+
+      <div style={{ marginTop: 32, fontSize: 12, color: "rgba(255,255,255,0.3)", fontFamily: F.mono }}>
+        No access? chirag.mewara.18@gmail.com
       </div>
-      <div style={{ marginTop: 48, fontSize: 11, color: "#6A6050", fontFamily: "monospace" }}>No access? chirag.mewara.18@gmail.com</div>
     </div>
   );
 }
 
-function Admin({ users, onAdd, onRevoke, onClose }) {
-  const [em, setEm] = useState(""); const [last, setLast] = useState(null); const [cp, setCp] = useState(false); const [cl, setCl] = useState(false);
-  async function add() { if (!em.trim()) return; const r = await onAdd(em.trim()); setLast({ email: em.trim(), password: r.pw }); setEm(""); }
-  function copy() { navigator.clipboard.writeText(`Portfolio\nEmail: ${last.email}\nPassword: ${last.password}`); setCp(true); setTimeout(() => setCp(false), 2000); }
-  function copyLink() {
-    const token = btoa(JSON.stringify({ e: last.email, p: last.password }));
-    const link = `${window.location.origin}/#key=${token}`;
-    navigator.clipboard.writeText(link); setCl(true); setTimeout(() => setCl(false), 2000);
-  }
-  const mn = { fontFamily: "IBM Plex Mono,monospace" };
+function Nav({ isAdmin }) {
+  const w = useW(); const mob = w < 680;
+  const links = [
+    ["snapshot","Snapshot"],["gaps","Gaps"],["vision","AI Vision"],
+    ["numbers","Impact"],["journey","Background"],["proposition","Proposal"],
+  ];
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.bdr}`, borderRadius: 10, padding: 24, marginBottom: 32, fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div><MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.2em", display: "block", marginBottom: 4 }}>ADMIN PANEL</MN><div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>Access Control</div></div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.dim, fontSize: 22, cursor: "pointer" }}>×</button>
-      </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input type="email" placeholder="Email to grant access" value={em} onChange={e => setEm(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
-          style={{ flex: 1, padding: "9px 12px", background: "rgba(255,255,255,0.04)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: T.text, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
-        <button onClick={add} style={{ background: T.gold, color: "#080808", border: "none", borderRadius: 6, padding: "9px 16px", fontSize: 11, ...mn, fontWeight: 600, cursor: "pointer" }}>ADD</button>
-      </div>
-      {last && (
-        <div style={{ background: "rgba(200,149,42,0.07)", border: `1px solid ${T.bdrg}`, borderRadius: 8, padding: 14, marginBottom: 16 }}>
-          <MN style={{ fontSize: 10, color: T.gold, display: "block", marginBottom: 8 }}>GENERATED CREDENTIALS</MN>
-          <MN style={{ fontSize: 12, color: T.text, display: "block", marginBottom: 4 }}>{last.email}</MN>
-          <MN style={{ fontSize: 16, color: T.goldd, fontWeight: 600, display: "block", marginBottom: 12 }}>{last.password}</MN>
-          <button onClick={copy} style={{ width: "100%", padding: "8px 0", background: cp ? "rgba(80,200,100,0.1)" : "rgba(255,255,255,0.05)", border: `1px solid ${T.bdr}`, borderRadius: 6, color: cp ? "#70C880" : T.text, fontSize: 11, ...mn, cursor: "pointer", marginBottom: 6 }}>
-            {cp ? "✓ Copied" : "Copy credentials"}
-          </button>
-          <button onClick={copyLink} style={{ width: "100%", padding: "8px 0", background: cl ? "rgba(200,149,42,0.15)" : "rgba(200,149,42,0.06)", border: `1px solid ${T.bdrg}`, borderRadius: 6, color: cl ? T.goldd : T.gold, fontSize: 11, ...mn, cursor: "pointer" }}>
-            {cl ? "✓ Magic link copied" : "Copy magic link (share this)"}
-          </button>
-        </div>
-      )}
-      <div style={{ fontSize: 11, color: T.dim, marginBottom: 10 }}>ACTIVE USERS ({users.length})</div>
-      {users.length === 0
-        ? <div style={{ fontSize: 13, color: "#2A2520", textAlign: "center", padding: "16px 0" }}>No users yet</div>
-        : users.map(u => (
-          <div key={u.email} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.bdr}` }}>
-            <div><div style={{ fontSize: 13, color: T.text }}>{u.email}</div>{u.last && <MN style={{ fontSize: 10, color: "#3A3028", display: "block" }}>Last: {new Date(u.last).toLocaleDateString()}</MN>}</div>
-            <button onClick={() => onRevoke(u.email)} style={{ background: "none", border: `1px solid ${T.bdr}`, borderRadius: 4, color: T.dim, padding: "4px 10px", fontSize: 10, ...mn, cursor: "pointer" }}>Revoke</button>
-          </div>
-        ))}
-    </div>
-  );
-}
-
-function Nav({ isAdmin, onAdmin }) {
-  const w = useW(); const mob = w < 700;
-  const links = [["gaps","Gaps"],["vision","AI Vision"],["competitors","Benchmark"],["numbers","Impact"],["journey","Journey"],["proposition","The Ask"]];
-  return (
-    <div style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(8,8,8,0.97)", borderBottom: `1px solid ${T.bdr}`, padding: mob ? "12px 20px" : "14px 48px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <MN style={{ fontSize: 11, color: T.gold, letterSpacing: "0.18em" }}>CM × SPINTLY</MN>
+    <div style={{
+      position: "sticky", top: 0, zIndex: 100, background: C.navy,
+      padding: mob ? "12px 20px" : "14px 40px",
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+    }}>
+      <span style={{ fontFamily: F.mono, fontSize: 12, color: C.white, fontWeight: 600, letterSpacing: "0.12em" }}>
+        CM × SPINTLY
+      </span>
       {!mob && (
-        <div style={{ display: "flex", gap: 22 }}>
-          {links.map(([id, l]) => (
-            <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })}
-              style={{ background: "none", border: "none", color: T.dim, fontSize: 12, cursor: "pointer", fontFamily: "IBM Plex Sans,system-ui,sans-serif" }}
-              onMouseEnter={e => e.target.style.color = T.text} onMouseLeave={e => e.target.style.color = T.dim}>{l}</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          {links.map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })}
+              style={{
+                background: "none", border: "none", color: "rgba(255,255,255,0.65)",
+                fontSize: 13, cursor: "pointer", fontFamily: F.sans, padding: "6px 10px",
+                borderRadius: 6, transition: "color 0.15s",
+              }}
+              onMouseEnter={e => e.target.style.color = C.white}
+              onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.65)"}
+            >{label}</button>
           ))}
         </div>
       )}
       {isAdmin
-        ? <button onClick={onAdmin} style={{ background: "rgba(200,149,42,0.12)", border: `1px solid ${T.bdrg}`, borderRadius: 4, color: T.gold, padding: "5px 12px", fontSize: 10, fontFamily: "monospace", cursor: "pointer" }}>ADMIN</button>
-        : <div />}
+        ? <span style={{
+            fontFamily: F.mono, fontSize: 10, color: C.orange,
+            background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.3)",
+            borderRadius: 4, padding: "4px 10px", letterSpacing: "0.1em",
+          }}>Author</span>
+        : <div style={{ width: 60 }} />}
     </div>
   );
 }
 
-function Portfolio({ isAdmin, showAdmin, onAdmin, onCloseAdmin, users, onAdd, onRevoke }) {
-  const w = useW(); const mob = w < 680;
+function Hero({ mob }) {
+  return (
+    <section id="hero" style={{
+      background: `linear-gradient(160deg, ${C.navy} 0%, #0D3580 50%, ${C.navyMid} 100%)`,
+      padding: mob ? "72px 24px 64px" : "108px 0 96px",
+    }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: mob ? "0" : "0 24px" }}>
+        <div style={{
+          display: "inline-block", fontFamily: F.mono, fontSize: 10, color: C.orange,
+          background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.25)",
+          padding: "5px 14px", borderRadius: 4, letterSpacing: "0.2em", marginBottom: 28,
+        }}>STRATEGIC PROPOSAL · 2025</div>
 
-  const two = (a, b) => (
-    <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 28 : 52 }}>{a}{b}</div>
+        <div style={{
+          fontSize: mob ? "clamp(46px,12vw,64px)" : "clamp(56px,7vw,96px)",
+          fontWeight: 800, color: C.white, lineHeight: 1.0, letterSpacing: "-0.03em",
+          marginBottom: 16,
+        }}>Chirag Mewara</div>
+
+        <div style={{ fontFamily: F.mono, fontSize: mob ? 13 : 15, color: "rgba(255,255,255,0.6)", marginBottom: 28, letterSpacing: "0.06em" }}>
+          Product Manager · Integration Leader · Access Control Expert
+        </div>
+
+        <p style={{ maxWidth: 680, fontSize: mob ? 15 : 17, color: "rgba(255,255,255,0.72)", lineHeight: 1.82, marginBottom: 40 }}>
+          Over 2.5 years of deploying Spintly's platform across 15 enterprise office parks has produced something rare: an expert who understands the product from the outside in.{" "}
+          <span style={{ color: C.white }}>This proposal maps that depth directly to Spintly's next chapter — AI product leadership, high-value integration ownership, and vertical market expansion.</span>
+        </p>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 56 }}>
+          <button
+            onClick={() => document.getElementById("snapshot")?.scrollIntoView({ behavior: "smooth" })}
+            style={{
+              background: C.blue, color: C.white, border: "none",
+              borderRadius: 8, padding: "14px 28px", fontSize: 14, fontWeight: 600,
+              fontFamily: F.sans, cursor: "pointer",
+            }}>
+            View Full Proposal ↓
+          </button>
+          <a href="mailto:chirag.mewara.18@gmail.com" style={{
+            background: "transparent", color: C.white,
+            border: "1px solid rgba(255,255,255,0.35)",
+            borderRadius: 8, padding: "14px 28px", fontSize: 14,
+            fontFamily: F.sans, textDecoration: "none", fontWeight: 500,
+          }}>
+            chirag.mewara.18@gmail.com
+          </a>
+        </div>
+
+        <div style={{
+          borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 28,
+          display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: mob ? 20 : 0,
+        }}>
+          {[
+            ["~115 team", "People building Spintly"],
+            ["Accel-backed × 2", "Seed round + Series A"],
+            ["$8M Series A", "Series B next"],
+            ["3 active markets", "India · US · Middle East"],
+          ].map(([n, l], i) => (
+            <div key={i} style={{ padding: mob ? "0" : "0 24px", borderRight: (!mob && i < 3) ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+              <div style={{ fontFamily: F.mono, fontSize: mob ? 18 : 22, fontWeight: 600, color: C.white, marginBottom: 6 }}>{n}</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
+}
 
-  const arrow = (items, color) => items.map((t, i) => (
-    <div key={i} style={{ display: "flex", gap: 11, marginBottom: 12, alignItems: "flex-start" }}>
-      <span style={{ color: color || T.gold, flexShrink: 0, marginTop: 2, fontSize: 11 }}>→</span>
-      <span style={{ color: T.dim, fontSize: 14, lineHeight: 1.64 }}>{t}</span>
-    </div>
-  ));
+function Snapshot({ mob }) {
+  const markets = [
+    {
+      title: "India", tag: "Full solution market",
+      img: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80",
+      items: [
+        "Hardware + software + cloud sold as one complete solution",
+        "Cloud-first access control — one of few in a rapidly growing market",
+        "White-label: Brigade, KRT, IBC, Embassy REIT",
+        "HR integrations live — Darwinbox and others",
+        "Camera module launched — video on access-denied events",
+      ],
+    },
+    {
+      title: "United States", tag: "Hardware-first expansion",
+      img: "https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&w=600&q=80",
+      items: [
+        "Selling readers only — not the full solution stack",
+        "Replacing legacy wired systems with wireless mesh",
+        "Channel partner model via resellers",
+        "No wiring = the hardware advantage — one gateway, palm-sized",
+        "Apple Wallet live — first in India, expanding globally",
+      ],
+    },
+    {
+      title: "Middle East", tag: "High-value on-prem",
+      img: "https://images.unsplash.com/photo-1512632578888-169bbbc64f33?auto=format&fit=crop&w=600&q=80",
+      items: [
+        "99% of clients require on-prem data sovereignty",
+        "3-year upfront contracts — highest value segment",
+        "On-prem deployment in development — critical market unlock",
+        "Oil & gas, banking, regulated industries",
+        "New regional hire placed to develop this market",
+      ],
+    },
+  ];
 
   return (
-    <div style={{ background: T.bg, fontFamily: "IBM Plex Sans,system-ui,sans-serif", color: T.text }}>
-      <Nav isAdmin={isAdmin} onAdmin={onAdmin} />
+    <Sec id="snapshot" bg={C.white}>
+      <Eyebrow>01 / Where Spintly Stands Today</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 20, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        A company at its most consequential inflection point
+      </h2>
+      <p style={{ maxWidth: 680, fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 52 }}>
+        Backed twice by Accel and operating simultaneously across India, the US, and the Middle East, Spintly is building toward Series B with a product and market position that few access control companies have achieved.
+      </p>
 
-      {showAdmin && isAdmin && (
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 24px 0" }}>
-          <Admin users={users} onAdd={onAdd} onRevoke={onRevoke} onClose={onCloseAdmin} />
-        </div>
-      )}
-
-      <Sec id="hero" noBorder>
-        <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.28em", textTransform: "uppercase", display: "block", marginBottom: 28 }}>Product Manager · Integration Builder · Domain Expert</MN>
-        <PD size={mob ? "52px" : "clamp(60px,10vw,108px)"} style={{ display: "block", fontWeight: 900, lineHeight: 0.95, letterSpacing: "-0.03em", marginBottom: 36, color: T.text }}>
-          I didn't<br /><Au>apply.</Au><br />I chose.
-        </PD>
-        <p style={{ maxWidth: 600, fontSize: mob ? 15 : 17, color: T.dim, lineHeight: 1.82, marginBottom: 40 }}>
-          Accel backed you twice — seed and series. You have a $8M runway, a US channel partner push underway, a Middle East market paying 3-year upfront contracts, and a pipeline of high-value integrations — NSI, banks, EV charging companies — that nobody inside your company currently has the bandwidth to own end-to-end.
-          {" "}<span style={{ color: T.text }}>I've been inside your product from the outside for 2.5 years. I know your API, your BLE mesh edge cases, your client pain, and your product gaps. This isn't a resume. It's a proposal.</span>
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ height: 1, width: 80, background: `linear-gradient(to right,${T.gold},transparent)` }} />
-          <MN style={{ fontSize: 10, color: "#2E2820", letterSpacing: "0.12em" }}>CHIRAG MEWARA · 2025</MN>
-        </div>
-      </Sec>
-
-      <Sec id="snapshot" bg={T.bg2}>
-        <Label n="01">Where Spintly Is Right Now</Label>
-        <ST>A company at the<br /><Au>best inflection point.</Au></ST>
-        <p style={{ maxWidth: 660, fontSize: 15, color: T.dim, lineHeight: 1.8, marginBottom: 44 }}>
-          I know this company from the inside-out — not from a pitch deck, but from 2.5 years of building the integration that powered your product across 15 office parks. Here's what I know about where you are.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 2, marginBottom: 36 }}>
-          {[
-            { market: "India", tag: "Full solution market",
-              items: ["Hardware + software + cloud — sold as one complete solution", "Rapidly growing access control market — you're one of the few cloud-first players", "White label deployments: Brigade, KRT, IBC, Embassy REIT", "HR integrations live: Darwinbox and others", "Camera module just launched — video capture on access-denied events"] },
-            { market: "US", tag: "Hardware-first expansion",
-              items: ["Selling readers only — not the full solution", "Replacing legacy wired access control readers with your wireless mesh", "Channel partner model: events in Bangalore to onboard US resellers", "No wiring = the unfair advantage — one gateway, size of your palm", "Apple Wallet live — first in India, expanding globally"] },
-            { market: "Middle East", tag: "High-value on-prem contracts",
-              items: ["99% of clients require on-prem — data cannot leave their servers", "3-year upfront contracts — highest contract value segment", "On-prem deployment in development — critical unlock for this market", "Oil & gas, banking, regulated industries — Spintly's next big frontier", "New hire just placed in Middle East to start understanding this market"] },
-          ].map((m, i) => (
-            <div key={i} style={{ padding: mob ? 22 : 32, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}` }}>
-              <MN style={{ fontSize: 9, color: T.gold, letterSpacing: "0.2em", textTransform: "uppercase", display: "block", background: "rgba(200,149,42,0.1)", padding: "4px 10px", borderRadius: 3, marginBottom: 12, width: "fit-content" }}>{m.tag}</MN>
-              <PD size="22px" style={{ display: "block", fontWeight: 700, marginBottom: 18, color: T.text }}>{m.market}</PD>
-              {m.items.map((t, j) => (
-                <div key={j} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
-                  <span style={{ color: T.gold, flexShrink: 0, fontSize: 11, marginTop: 2 }}>→</span>
-                  <span style={{ color: T.dim, fontSize: 13, lineHeight: 1.62 }}>{t}</span>
-                </div>
-              ))}
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 24, marginBottom: 40 }}>
+        {markets.map((m, i) => (
+          <Card key={i} style={{ overflow: "hidden" }}>
+            <img src={m.img} alt={m.title} style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }} />
+            <div style={{ padding: 24 }}>
+              <Tag>{m.tag}</Tag>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.dark, marginBottom: 16 }}>{m.title}</div>
+              {m.items.map((t, j) => <Bullet key={j}>{t}</Bullet>)}
             </div>
-          ))}
-        </div>
-        <div style={{ padding: mob ? 20 : "24px 36px", background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}`, borderRadius: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(4,1fr)", gap: mob ? 20 : 0 }}>
-            {[
-              ["~115", "People in the team"],
-              ["Accel", "Backed twice — seed + series"],
-              ["$8M", "Series A — Series B next"],
-              ["7–8", "Sales hires in progress now"],
-            ].map(([n, l], i) => (
-              <div key={i} style={{ padding: "16px 24px", borderRight: (!mob && i < 3) ? `1px solid ${T.bdr}` : "none" }}>
-                <MN style={{ fontSize: 28, fontWeight: 300, color: T.goldd, display: "block", lineHeight: 1, marginBottom: 8 }}>{n}</MN>
-                <div style={{ fontSize: 12, color: T.dim, lineHeight: 1.5 }}>{l}</div>
-              </div>
-            ))}
+          </Card>
+        ))}
+      </div>
+
+      <div style={{
+        background: C.navy, borderRadius: 12, padding: mob ? "24px 20px" : "28px 40px",
+        display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: mob ? 20 : 0,
+      }}>
+        {[
+          ["~115 people", "Across India · US · Middle East"],
+          ["Accel seed + series", "Two rounds of conviction"],
+          ["$8M Series A", "Series B trajectory"],
+          ["7–8 sales hires", "Active hiring in progress"],
+        ].map(([n, l], i) => (
+          <div key={i} style={{ padding: mob ? "0" : "0 24px", borderRight: (!mob && i < 3) ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+            <div style={{ fontFamily: F.mono, fontSize: mob ? 16 : 20, fontWeight: 600, color: C.white, marginBottom: 6 }}>{n}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{l}</div>
           </div>
-        </div>
-      </Sec>
+        ))}
+      </div>
+    </Sec>
+  );
+}
 
-      <Sec id="gaps" bg={T.bg}>
-        <Label n="02">The Gaps I See</Label>
-        <ST>Four problems slowing<br /><Au>Spintly's 10x.</Au></ST>
-        <p style={{ maxWidth: 640, fontSize: 15, color: T.dim, lineHeight: 1.78, marginBottom: 48 }}>
-          2.5 years of owning the Anacity-Spintly integration gave me a view most people inside Spintly don't have — what the product actually looks like when it hits real clients, real buildings, and real failure modes.
+function Gaps({ mob }) {
+  const gaps = [
+    {
+      tag: "Revenue Ceiling",
+      title: "The integration bottleneck is blocking Spintly's highest-value deals",
+      body: "Every high-value integration — NSI, banks, EV charging companies — requires 2–3 months of dedicated product and engineering attention. The product leadership and engineering team carry this entirely. Each integration delays the next. With multiple high-value clients in the pipeline, this bottleneck is quietly capping Spintly's revenue ceiling.",
+      fix: "End-to-end integration ownership — from requirement discovery to delivery, rollout, and post-launch loop. No handoffs. No bottlenecks. Multiple integrations running in parallel.",
+    },
+    {
+      tag: "Retention Risk",
+      title: "After onboarding, clients go into a feedback desert",
+      body: "Once a client is onboarded, there is no structured loop bringing their ground-level experience back into the product roadmap. The client success team attends meetings and translates requirements, but there is no systematic process for converting that into prioritised product decisions.",
+      fix: "A feedback-to-product loop — structured collection, RICE-scored prioritisation, and a quarterly client product council that feeds directly into the roadmap.",
+    },
+    {
+      tag: "Untapped TAM",
+      title: "Spintly's platform solves 5 verticals. It is actively selling to 2.",
+      body: "The same BLE mesh technology and cloud platform that works for commercial real estate works for colleges, schools, hospitals, co-working chains, and EV charging stations. No dedicated product work translates Spintly's existing capabilities into vertical-specific feature sets, pricing, or go-to-market briefs. This is 3–5× the current addressable market.",
+      fix: "One new vertical mapped per quarter — product delta identified, feature gaps logged, sales enablement brief built. Starting with institutions and co-working, where the pipeline already exists.",
+    },
+    {
+      tag: "Competitive Urgency",
+      title: "AI is Spintly's biggest differentiator. It is still on the roadmap.",
+      body: "Banks are already asking Spintly for anomaly detection. Competitors have shipped it. NLP search launched in the industry in 2025. Spintly's NLP bar and anomaly detection are in development. The camera module just launched — that is the foundation. But the intelligence layer on top is what regulated-industry clients pay a premium for, and every quarter it stays on the roadmap is a quarter competitors pull ahead.",
+      fix: "Define and drive the full AI product layer — anomaly engine, NLP command bar, client intelligence summaries — from spec to production using Spintly's existing access data.",
+    },
+  ];
+
+  return (
+    <Sec id="gaps" bg={C.blueTint}>
+      <Eyebrow>02 / The Strategic Opportunity</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 20, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        Four problems quietly capping Spintly's next step
+      </h2>
+      <p style={{ maxWidth: 680, fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 52 }}>
+        2.5 years of owning the Anacity–Spintly integration across 15 office parks produced a perspective most observers don't have: what the product actually looks like when it hits real clients, real buildings, and real failure modes.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 24 }}>
+        {gaps.map((g, i) => (
+          <Card key={i} style={{ padding: mob ? 24 : 32 }}>
+            <Tag color={C.orange} bg="rgba(249,115,22,0.1)">{g.tag}</Tag>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: C.dark, marginBottom: 12, lineHeight: 1.35 }}>{g.title}</h3>
+            <p style={{ color: C.muted, lineHeight: 1.78, fontSize: 14, marginBottom: 20 }}>{g.body}</p>
+            <div style={{
+              borderLeft: `3px solid ${C.blue}`, paddingLeft: 16,
+              color: C.navy, fontSize: 13, fontFamily: F.sans, lineHeight: 1.65, fontWeight: 500,
+            }}>{g.fix}</div>
+          </Card>
+        ))}
+      </div>
+    </Sec>
+  );
+}
+
+function AIVision({ mob }) {
+  const features = [
+    { icon: "⚡", title: "Anomaly Engine", body: "Flags unusual patterns — restricted zone access outside schedule, repeated card-denial events at 2AM, device ping patterns suggesting hardware failure before it fails. Banks are already requesting this. It is not a roadmap item — it is a live procurement requirement from paying clients." },
+    { icon: "🧠", title: "Client Intelligence Layer", body: "AI-generated weekly summaries per client dashboard. \"3 doors had repeated access denials between 2–4AM this week. 2 users accessed restricted zones outside assigned schedules.\" Turns Spintly from a passive tool into a proactive security partner — and the primary upsell mechanism." },
+    { icon: "💬", title: "NLP Command Bar", body: "\"Show everyone who accessed Floor 3 in the last 48 hours.\" No query builder. No report wizard. No training required. The NLP bar Spintly is already building — driven from idea to production-grade feature that clients use daily." },
+    { icon: "🔧", title: "Predictive Maintenance", body: "Device health + access-denial patterns + firmware states → predict hardware failures before they become client escalations. A reader that fails at 9AM Monday is a client crisis. One flagged 3 days earlier is a scheduled field visit. Enterprise clients will pay a premium for this reliability layer." },
+    { icon: "🚀", title: "Integration Copilot", body: "AI-assisted requirement capture reduces discovery from 3 weeks to 3 days. Structured templates, auto-generated spec drafts, feasibility flags from historical integration data. Every integration starts faster and finishes cleaner." },
+    { icon: "📊", title: "Space Intelligence", body: "Access data + GPS check-in + footfall + headcount → space utilisation insights for REITs, co-working chains, and enterprise clients. The feature that moves Spintly into the BMS conversation — a market 10× bigger than access control alone." },
+  ];
+
+  return (
+    <section id="vision" style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMid} 100%)`, padding: mob ? "72px 24px" : "88px 0" }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: mob ? "0" : "0 24px" }}>
+        <Eyebrow color={C.orange}>03 / The Intelligence Layer</Eyebrow>
+        <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.white, marginBottom: 20, lineHeight: 1.12, letterSpacing: "-0.02em", maxWidth: 760 }}>
+          Spintly's platform generates millions of access events daily. That data isn't yet thinking.
+        </h2>
+        <p style={{ maxWidth: 680, fontSize: 16, color: "rgba(255,255,255,0.65)", lineHeight: 1.8, marginBottom: 52 }}>
+          Every access event, device state, GPS check-in, footfall flow, and anomaly signal is captured. Right now it is stored and displayed. Here is what it looks like when it starts to reason — built on infrastructure Spintly already has.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 2 }}>
-          {[
-            { n: "01", tag: "Revenue Ceiling", title: "The integration bottleneck is blocking your highest-value deals",
-              body: "Every high-value integration — NSI, banks, EV charging companies — requires 2–3 months of dedicated product and engineering attention. Right now this falls entirely on Shubhang and engineering simultaneously. Each integration blocks the next one. With a client like NSI closing tomorrow, and banks and more EV companies in the pipeline, this bottleneck is quietly capping your revenue ceiling.",
-              fix: "I own every integration end-to-end — from requirement discovery and feasibility to delivery, rollout, and post-launch feedback loop. No handoffs. No bottlenecks. Multiple integrations running in parallel." },
-            { n: "02", tag: "Client Retention Risk", title: "After onboarding, clients go into a feedback desert",
-              body: "Once a client is onboarded, there's no structured loop bringing their ground-level experience back into the product roadmap. Dineer attends client meetings and translates requirements, but there's no systematic process for turning that into prioritised product decisions. Features end up being driven by whoever is loudest — US market, Middle East, or the latest sales escalation — while India enterprise clients sit on unresolved pain.",
-              fix: "I will build the feedback-to-product loop — structured collection, RICE-scored prioritisation, and a quarterly client product council that feeds directly into the roadmap." },
-            { n: "03", tag: "Untapped TAM", title: "Your platform solves 5 verticals. You're actively selling to 2.",
-              body: "The same BLE mesh technology and cloud platform that works for commercial real estate works for colleges, schools, hospitals, co-working chains, and EV charging stations. But there's no dedicated product work translating Spintly's existing capabilities into vertical-specific feature sets, pricing, and go-to-market briefs. This is 3–5x your current addressable market sitting untouched.",
-              fix: "One new vertical mapped per quarter — product delta identified, feature gaps logged, sales enablement brief built. Starting with institutions and co-working, where the pipeline already exists." },
-            { n: "04", tag: "Competitive Urgency", title: "AI is your biggest differentiator. It's still on the roadmap.",
-              body: "Banks are already asking Spintly for anomaly detection. Brivo shipped it. Avigilon Alta shipped it. Genetec launched NLP search in 2025. Meanwhile Spintly's NLP bar and anomaly detection are still in development. The camera module just launched — that's a foundation. But the intelligence layer on top of it is what clients in regulated industries will pay a premium for, and every quarter it stays on the roadmap is a quarter competitors pull ahead.",
-              fix: "I will define the full AI product layer — anomaly engine, NLP command bar, client intelligence summaries — and drive each from spec to production using Spintly's existing access data." },
-          ].map((g, i) => (
-            <div key={i} style={{ padding: mob ? 22 : 36, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <MN style={{ fontSize: 9, color: T.gold, letterSpacing: "0.18em", textTransform: "uppercase", background: "rgba(200,149,42,0.1)", padding: "4px 10px", borderRadius: 3 }}>{g.tag}</MN>
-                <MN style={{ fontSize: 28, fontWeight: 300, color: "rgba(255,255,255,0.04)", lineHeight: 1 }}>{g.n}</MN>
-              </div>
-              <PD size="16px" style={{ display: "block", fontWeight: 700, marginBottom: 12, color: T.text, lineHeight: 1.35 }}>{g.title}</PD>
-              <p style={{ color: T.dim, lineHeight: 1.76, fontSize: 14, marginBottom: 16 }}>{g.body}</p>
-              <div style={{ borderLeft: `2px solid ${T.gold}`, paddingLeft: 14, color: T.goldd, fontSize: 13, fontFamily: "IBM Plex Mono,monospace", lineHeight: 1.6 }}>{g.fix}</div>
-            </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 20, marginBottom: 32 }}>
+          {features.map((f, i) => (
+            <Card key={i} style={{ padding: mob ? 20 : 28 }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>{f.icon}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 10 }}>{f.title}</div>
+              <p style={{ color: C.muted, lineHeight: 1.72, fontSize: 14, margin: 0 }}>{f.body}</p>
+            </Card>
           ))}
         </div>
-      </Sec>
 
-      <Sec id="vision" bg={T.bg2}>
-        <Label n="03">The AI Studio Vision</Label>
-        <ST>Your platform has the data.<br /><Au>I'll make it think.</Au></ST>
-        <p style={{ maxWidth: 680, fontSize: 15, color: T.dim, lineHeight: 1.8, marginBottom: 48 }}>
-          Spintly's platform captures millions of access events, device states, user patterns, GPS check-ins, footfall flows, and anomaly signals every day. Right now that data is stored and displayed. It isn't thinking. Here's what Year 1 looks like when it does — built on infrastructure you already have.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 2, marginBottom: 40 }}>
-          {[
-            { icon: "⚡", title: "Anomaly Engine", body: "Flags unusual access patterns automatically — someone accessing a restricted zone outside their schedule, repeated card-denial events at 2AM, device ping patterns suggesting hardware failure before it fails. Banks are already asking Spintly for exactly this. It's not a roadmap item. It's a live requirement from paying clients." },
-            { icon: "🧠", title: "Client Intelligence Layer", body: "Each client dashboard gets an AI-generated weekly summary: 'This week, 3 doors had repeated access denials between 2–4AM. 2 users accessed restricted zones outside their assigned schedules.' Turns Spintly from a passive access control tool into a proactive security partner. This is the retention lever — and the upsell." },
-            { icon: "💬", title: "NLP Command Bar", body: "'Show me everyone who accessed Floor 3 in the last 48 hours.' 'Create a temporary access pass for all visitors tomorrow.' No query. No report. No training required. The search bar Shubhang is already building — I'll drive it from idea to production-grade feature that clients actually use daily." },
-            { icon: "🔧", title: "Predictive Maintenance", body: "Device health + repeated access-denial patterns + firmware states → predict hardware issues before they become client escalations. A reader that fails at 9AM Monday is a client crisis. One flagged 3 days earlier is a scheduled field visit. Enterprise clients — especially banks and oil & gas — will pay a premium for this reliability layer." },
-            { icon: "🚀", title: "Integration Copilot", body: "When onboarding a new client integration — NSI, a bank, an EV charging company — AI-assisted requirement capture reduces discovery from 3 weeks to 3 days. Structured interview templates, auto-generated spec drafts, feasibility flags pulled from historical integration data. Every integration starts faster and ends cleaner." },
-            { icon: "📊", title: "Space Intelligence", body: "Access data + GPS check-in + footfall + head count analytics → space utilisation insights for REITs, co-working chains, and enterprise clients. This is the feature that gets Spintly into the BMS conversation — a market 10x bigger than access control alone. Shubhang mentioned HVAC and building management as an area being explored. This is the product foundation for it." },
-          ].map((f, i) => (
-            <div key={i} style={{ padding: mob ? 20 : 28, background: i % 2 === 0 ? "rgba(200,149,42,0.03)" : "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}` }}>
-              <div style={{ fontSize: 26, marginBottom: 12 }}>{f.icon}</div>
-              <PD size="16px" style={{ display: "block", fontWeight: 700, marginBottom: 10, color: T.text }}>{f.title}</PD>
-              <p style={{ color: T.dim, lineHeight: 1.72, fontSize: 14 }}>{f.body}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: mob ? 22 : "28px 40px", background: "rgba(200,149,42,0.04)", border: `1px solid ${T.bdrg}`, borderRadius: 8 }}>
-          <PD size="17px" style={{ display: "block", fontWeight: 700, color: T.goldd, marginBottom: 10 }}>This is not a 3-year roadmap.</PD>
-          <p style={{ color: T.dim, fontSize: 15, lineHeight: 1.78, maxWidth: 740 }}>
-            Each of these features is buildable on your existing Kubernetes + AWS infrastructure in 6–12 weeks with the right product definition driving it. I've shipped AI as a core execution layer before — not a demo, not a pilot, but production-grade intelligence that automated a 3-member support function entirely. I'll do it again, with far more domain context and richer access data this time.
+        <div style={{
+          border: `2px solid ${C.blue}`, borderRadius: 12,
+          padding: mob ? 22 : "28px 40px", background: "rgba(26,86,219,0.08)",
+        }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.white, marginBottom: 10 }}>This is not a 3-year roadmap.</div>
+          <p style={{ color: "rgba(255,255,255,0.68)", fontSize: 15, lineHeight: 1.78, maxWidth: 780, margin: 0 }}>
+            Each of these features is buildable on Spintly's existing Kubernetes + AWS infrastructure in 6–12 weeks with the right product definition. Chirag has shipped AI as a production operating layer before — not a demo or a pilot, but intelligence that replaced a 3-person support function entirely.
           </p>
         </div>
-      </Sec>
+      </div>
+    </section>
+  );
+}
 
-      <Sec id="orchestrator" bg={T.bg}>
-        <Label n="04">How I'll Operate Inside Spintly</Label>
-        <ST>Three swim lanes.<br /><Au>One orchestrator.</Au></ST>
-        <p style={{ maxWidth: 640, fontSize: 15, color: T.dim, lineHeight: 1.8, marginBottom: 44 }}>
-          The role Shubhang described — and the role that doesn't exist yet, created specifically for this conversation — is larger than product management. It sits between integration delivery, product evolution, and market expansion. Here's how I see it working.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 2, marginBottom: 36 }}>
-          {[
-            { n: "01", lane: "Integration Ownership Lane", color: T.gold,
-              items: ["Own end-to-end lifecycle of all high-value client integrations — NSI, banks, EV charging stations", "Single point of contact between client, Shubhang, and the engineering lead — no daily dev management, but full project visibility", "Discovery → feasibility scoping → build coordination → rollout → post-launch feedback loop", "Run multiple integrations in parallel without blocking the core product roadmap", "Target: 2 major integration closures per quarter"] },
-            { n: "02", lane: "Product Evolution Lane", color: T.goldd,
-              items: ["Translate client pain, market signals, and Dineer's field insights into a prioritised product roadmap", "Collaborate with Waibah (Head of Product, US) on global roadmap alignment", "Drive the AI Studio features — anomaly detection, NLP bar, client intelligence — from spec to production", "Own the client feedback → product loop: structured collection, RICE prioritisation, quarterly product council", "Work alongside the product + UX team in India as both contributor and thought partner"] },
-            { n: "03", lane: "Vertical Expansion Lane", color: "#D4C080",
-              items: ["Map 2 new verticals per quarter — colleges, hospitals, co-working chains, regulated banking", "Define what the product needs to look like for each vertical — feature delta, compliance requirements, UX considerations", "Build go-to-market product brief for the sales team so they can sell into the vertical with confidence", "Identify which existing features translate directly and which need to be built from scratch", "Feed vertical learnings back into the core product roadmap for generalised solutions"] },
-          ].map((l, i) => (
-            <div key={i} style={{ padding: mob ? 22 : 32, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}` }}>
-              <MN style={{ fontSize: 26, fontWeight: 300, color: "rgba(255,255,255,0.04)", display: "block", lineHeight: 1, marginBottom: 12 }}>{l.n}</MN>
-              <div style={{ width: 28, height: 2, background: l.color, marginBottom: 14 }} />
-              <PD size="17px" style={{ display: "block", fontWeight: 700, marginBottom: 18, color: T.text }}>{l.lane}</PD>
-              {l.items.map((item, j) => (
-                <div key={j} style={{ display: "flex", gap: 10, marginBottom: 11, alignItems: "flex-start" }}>
-                  <span style={{ color: l.color, flexShrink: 0, marginTop: 2, fontSize: 11 }}>→</span>
-                  <span style={{ color: T.dim, fontSize: 13, lineHeight: 1.62 }}>{item}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: mob ? 20 : "26px 36px", background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}`, borderRadius: 8 }}>
-          <PD size="14px" style={{ color: T.dim, fontStyle: "italic", lineHeight: 1.84, maxWidth: 740, display: "block" }}>
-            "All three lanes feed into each other — and that's the point. A client integration at NSI surfaces a product gap. That product gap maps to a hospital or banking vertical. That vertical becomes a new roadmap item that Waibah's team can plan globally. I'm the person who sees all three simultaneously and makes sure none of them operate in isolation. That's what Shubhang described. That's what this role is."
-          </PD>
-        </div>
-      </Sec>
+function RoleModel({ mob }) {
+  const lanes = [
+    {
+      accentColor: C.blue, title: "Integration Ownership",
+      items: [
+        "End-to-end lifecycle of all high-value client integrations",
+        "Single point of contact between client, engineering, and product leadership",
+        "Discovery → feasibility → build coordination → rollout → post-launch loop",
+        "Multiple integrations in parallel without blocking the core roadmap",
+        "Target: 2 major integration closures per quarter",
+      ],
+    },
+    {
+      accentColor: C.navy, title: "Product Evolution",
+      items: [
+        "Client pain, market signals, and field insights → prioritised product roadmap",
+        "Alignment with the US Head of Product on global roadmap",
+        "Drive the AI Studio features — anomaly detection, NLP bar, client intelligence — from spec to production",
+        "Own the client feedback → product loop: RICE prioritisation, quarterly product council",
+        "Contributor and thought partner to India product + UX team",
+      ],
+    },
+    {
+      accentColor: C.orange, title: "Vertical Expansion",
+      items: [
+        "2 new verticals mapped per quarter — colleges, hospitals, co-working, regulated banking",
+        "Define the product delta for each vertical — feature requirements, compliance, UX",
+        "Build go-to-market product briefs so the sales team can sell into the vertical with confidence",
+        "Feed vertical learnings back into the core roadmap for generalised solutions",
+      ],
+    },
+  ];
 
-      <Sec id="competitors" bg={T.bg2}>
-        <Label n="05">The Benchmark</Label>
-        <ST>Where the world is.<br /><Au>Where Spintly stands.</Au></ST>
-        <p style={{ maxWidth: 680, fontSize: 15, color: T.dim, lineHeight: 1.8, marginBottom: 44 }}>
-          The access control industry is consolidating fast. Global players are merging video + access + AI into unified platforms and shipping features that were 3-year roadmaps just 24 months ago. Here's the honest picture — and where Spintly's gaps create urgency.
-        </p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 2, marginBottom: 44 }}>
-          {[
-            { name: "Brivo (USA)", sub: "Merged with Eagle Eye Networks Dec 2025 · World's largest AI-native physical security company · 1 billion sq ft · 80 countries · 20M users",
-              items: ["AI anomaly detection — in production, not roadmap", "Eeva: AI video agent with natural language queries across footage", "Brivo Genius: NLP smart filters across events, users, and devices", "Unified video + access + visitor management + intrusion in one dashboard", "300+ integration marketplace with HR, property management, IT identity providers", "SOC2, GDPR, HIPAA certified — table stakes for US banking and healthcare", "Visitor management: self-serve kiosks, watchlist screening, compliance tracking"] },
-            { name: "Avigilon Alta / Openpath (Motorola Solutions)", sub: "100% serverless cloud · AI-powered · Enterprise and regulated industries globally",
-              items: ["ML-based behavioral anomaly detection — self-learning, not rule-based", "Alta Aware: native AI video analytics running in real-time on cloud", "Wave-to-unlock: hands-free entry detection, no app needed", "AI intercom with voice recognition and automatic visitor routing", "Triple Unlock: Wi-Fi + cellular + BLE simultaneously — 99.9% uptime reliability", "OTA hardware diagnostics and troubleshooting via mobile without being on-site", "Open API with a full developer portal and partner ecosystem"] },
-            { name: "Kisi (USA)", sub: "Most-deployed cloud access control for offices globally · Transparent SaaS pricing",
-              items: ["Published pricing tiers: $50–80/door/month — self-serve buying, not just sales-led", "Tailgating detection: alerts when someone follows an authorized user through a door", "20+ native integrations: Okta, Google Calendar, Slack, JumpCloud, Cisco Meraki", "SOC2 compliance audit trail export in CSV for regulatory requirements", "Full offline mode: credentials cached on reader and phone — works without internet", "Per-door granular audit logs exportable for compliance and investigations"] },
-            { name: "ZKTeco / ESSL / Matrix (India)", sub: "Legacy hardware-first players dominating Indian mid-market and government",
-              items: ["Biometric access (fingerprint + facial recognition) — embedded standard in Indian enterprise, banking, and government", "Sub-₹5,000/device price points — mass market penetration Spintly hasn't reached", "Offline-first operation — works reliably in low-connectivity environments", "Established distributor networks across tier 2 and tier 3 Indian cities", "STQC and BIS government certifications — unlocks public sector contracts Spintly currently cannot bid on"] },
-          ].map((c, i) => (
-            <div key={i} style={{ padding: mob ? 22 : 32, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}` }}>
-              <PD size="17px" style={{ display: "block", fontWeight: 700, color: T.text, marginBottom: 8 }}>{c.name}</PD>
-              <div style={{ fontSize: 12, color: T.dim, lineHeight: 1.6, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${T.bdr}` }}>{c.sub}</div>
-              {c.items.map((h, j) => (
-                <div key={j} style={{ display: "flex", gap: 10, marginBottom: 9, alignItems: "flex-start" }}>
-                  <span style={{ color: "#5A9E6A", flexShrink: 0, fontSize: 11, marginTop: 2 }}>✓</span>
-                  <span style={{ color: T.dim, fontSize: 13, lineHeight: 1.6 }}>{h}</span>
-                </div>
-              ))}
+  return (
+    <Sec id="role" bg={C.white}>
+      <Eyebrow>04 / The Operating Model</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 20, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        Three swim lanes. One product leader.
+      </h2>
+      <p style={{ maxWidth: 680, fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 52 }}>
+        The role sits between integration delivery, product evolution, and market expansion — three workstreams that currently have no single owner. Here is how each lane runs.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr 1fr", gap: 24 }}>
+        {lanes.map((lane, i) => (
+          <Card key={i} style={{ overflow: "hidden" }}>
+            <div style={{ height: 4, background: lane.accentColor }} />
+            <div style={{ padding: mob ? 22 : 28 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.dark, marginBottom: 18 }}>{lane.title}</div>
+              {lane.items.map((item, j) => <Bullet key={j} color={lane.accentColor}>{item}</Bullet>)}
             </div>
-          ))}
-        </div>
-        <PD size="20px" style={{ display: "block", fontWeight: 700, marginBottom: 20, color: T.text }}>The Gap Table</PD>
-        <div style={{ overflowX: "auto", marginBottom: 36 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 580 }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${T.bdr}` }}>
-                {["Capability", "Brivo", "Avigilon", "Kisi", "ZKTeco", "Spintly"].map((h, i) => (
-                  <th key={i} style={{ padding: "11px 14px", textAlign: i === 0 ? "left" : "center", fontFamily: "IBM Plex Mono,monospace", fontSize: 10, color: i === 5 ? T.gold : T.dim, letterSpacing: "0.1em", fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
+          </Card>
+        ))}
+      </div>
+    </Sec>
+  );
+}
+
+function Benchmark({ mob }) {
+  const competitors = [
+    {
+      name: "Brivo (USA)",
+      sub: "Merged with Eagle Eye Networks Dec 2025 · World's largest AI-native physical security company · 1 billion sq ft · 80 countries · 20M users",
+      items: [
+        "AI anomaly detection — in production, not roadmap",
+        "Eeva: AI video agent with natural language queries across footage",
+        "Brivo Genius: NLP smart filters across events, users, and devices",
+        "Unified video + access + visitor management + intrusion in one dashboard",
+        "300+ integration marketplace with HR, property management, IT identity providers",
+        "SOC2, GDPR, HIPAA certified — table stakes for US banking and healthcare",
+        "Visitor management: self-serve kiosks, watchlist screening, compliance tracking",
+      ],
+    },
+    {
+      name: "Avigilon Alta (Motorola Solutions)",
+      sub: "100% serverless cloud · AI-powered · Enterprise and regulated industries globally",
+      items: [
+        "ML-based behavioral anomaly detection — self-learning, not rule-based",
+        "Alta Aware: native AI video analytics running in real-time on cloud",
+        "Wave-to-unlock: hands-free entry detection, no app needed",
+        "AI intercom with voice recognition and automatic visitor routing",
+        "Triple Unlock: Wi-Fi + cellular + BLE simultaneously — 99.9% uptime reliability",
+        "OTA hardware diagnostics and troubleshooting via mobile without being on-site",
+        "Open API with a full developer portal and partner ecosystem",
+      ],
+    },
+    {
+      name: "Kisi (USA)",
+      sub: "Most-deployed cloud access control for offices globally · Transparent SaaS pricing",
+      items: [
+        "Published pricing tiers: $50–80/door/month — self-serve buying, not just sales-led",
+        "Tailgating detection: alerts when someone follows an authorized user through a door",
+        "20+ native integrations: Okta, Google Calendar, Slack, JumpCloud, Cisco Meraki",
+        "SOC2 compliance audit trail export in CSV for regulatory requirements",
+        "Full offline mode: credentials cached on reader and phone — works without internet",
+        "Per-door granular audit logs exportable for compliance and investigations",
+      ],
+    },
+    {
+      name: "ZKTeco / ESSL / Matrix (India)",
+      sub: "Legacy hardware-first players dominating Indian mid-market and government",
+      items: [
+        "Biometric access (fingerprint + facial recognition) — embedded standard in Indian enterprise",
+        "Sub-₹5,000/device price points — mass market penetration",
+        "Offline-first operation — works reliably in low-connectivity environments",
+        "Established distributor networks across tier 2 and tier 3 Indian cities",
+        "STQC and BIS government certifications — unlocks public sector contracts",
+      ],
+    },
+  ];
+
+  const tableRows = [
+    ["AI anomaly detection","✅ Live","✅ Live","❌","❌","⚠️ Roadmap"],
+    ["Unified video + access","✅ Native","✅ Native","❌","❌","⚠️ Partnered"],
+    ["NLP natural language","✅ Eeva","❌","❌","❌","⚠️ In dev"],
+    ["Full visitor management","✅ Envoy","✅","✅ Basic","❌","⚠️ QR only"],
+    ["SOC2 / GDPR certified","✅","✅","✅","❌","❌"],
+    ["Integration marketplace","✅ 300+","✅ Open","✅ 20+","❌","⚠️ Limited"],
+    ["Biometric / facial","✅ Video AI","✅ At door","❌","✅ Core","❌"],
+    ["Transparent pricing","✅","❌","✅","✅","❌"],
+    ["Full offline mode","✅","✅","✅","✅","⚠️ Limited"],
+    ["On-prem for regulated","✅","✅","❌","✅","⚠️ In dev"],
+    ["Tailgating detection","✅","✅","✅","✅","❌"],
+    ["BLE Mesh / no wiring","❌","❌","❌","❌","✅ Patented"],
+    ["Apple / Google Wallet","✅","✅","✅","❌","✅ 1st India"],
+    ["Gov certifications (India)","❌","❌","❌","✅","❌"],
+  ];
+
+  return (
+    <Sec id="competitors" bg={C.altBg}>
+      <Eyebrow>05 / The Competitive Landscape</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 20, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        Where global competitors stand — and where Spintly's gaps create urgency
+      </h2>
+      <p style={{ maxWidth: 680, fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 52 }}>
+        The access control industry is consolidating around unified video + access + AI platforms. Here is the honest picture.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 44 }}>
+        {competitors.map((c, i) => (
+          <Card key={i} style={{ padding: mob ? 22 : 28 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.dark, marginBottom: 8 }}>{c.name}</div>
+            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>{c.sub}</div>
+            {c.items.map((h, j) => (
+              <div key={j} style={{ display: "flex", gap: 10, marginBottom: 9, alignItems: "flex-start" }}>
+                <span style={{ color: "#16A34A", flexShrink: 0, fontSize: 11, marginTop: 2 }}>✓</span>
+                <span style={{ color: C.muted, fontSize: 13, lineHeight: 1.6, fontFamily: F.sans }}>{h}</span>
+              </div>
+            ))}
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.dark, marginBottom: 20 }}>The Gap Table</div>
+      <div style={{ overflowX: "auto", marginBottom: 36, borderRadius: 12, boxShadow: C.shadowSm, border: `1px solid ${C.border}` }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 580, background: C.white }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.altBg }}>
+              {["Capability", "Brivo", "Avigilon", "Kisi", "ZKTeco", "Spintly"].map((h, i) => (
+                <th key={i} style={{
+                  padding: "12px 16px", textAlign: i === 0 ? "left" : "center",
+                  fontFamily: F.mono, fontSize: 10, color: i === 5 ? C.blue : C.muted,
+                  letterSpacing: "0.1em", fontWeight: 600, whiteSpace: "nowrap",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map(([cap, ...vals], i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.white : C.altBg }}>
+                <td style={{ padding: "10px 16px", color: C.dark, fontSize: 13 }}>{cap}</td>
+                {vals.map((v, j) => (
+                  <td key={j} style={{
+                    padding: "10px 16px", textAlign: "center", fontFamily: F.mono, fontSize: 11,
+                    color: j === 4
+                      ? (v.startsWith("✅") ? C.blue : v.startsWith("⚠️") ? C.orange : "#DC2626")
+                      : (v.startsWith("✅") ? "#16A34A" : v.startsWith("⚠️") ? "#D97706" : "#9CA3AF"),
+                  }}>{v}</td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {[
-                ["AI anomaly detection","✅ Live","✅ Live","❌","❌","⚠️ Roadmap"],
-                ["Unified video + access","✅ Native","✅ Native","❌","❌","⚠️ Partnered"],
-                ["NLP natural language","✅ Eeva","❌","❌","❌","⚠️ In dev"],
-                ["Full visitor management","✅ Envoy","✅","✅ Basic","❌","⚠️ QR only"],
-                ["SOC2 / GDPR certified","✅","✅","✅","❌","❌"],
-                ["Integration marketplace","✅ 300+","✅ Open","✅ 20+","❌","⚠️ Limited"],
-                ["Biometric / facial","✅ Video AI","✅ At door","❌","✅ Core","❌"],
-                ["Transparent pricing","✅","❌","✅","✅","❌"],
-                ["Full offline mode","✅","✅","✅","✅","⚠️ Limited"],
-                ["On-prem for regulated","✅","✅","❌","✅","⚠️ In dev"],
-                ["Tailgating detection","✅","✅","✅","✅","❌"],
-                ["BLE Mesh / no wiring","❌","❌","❌","❌","✅ Patented"],
-                ["Apple / Google Wallet","✅","✅","✅","❌","✅ 1st India"],
-                ["Gov certifications (India)","❌","❌","❌","✅","❌"],
-              ].map(([cap, ...vals], i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${T.bdr}`, background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-                  <td style={{ padding: "10px 14px", color: T.dim, fontSize: 13 }}>{cap}</td>
-                  {vals.map((v, j) => (
-                    <td key={j} style={{ padding: "10px 14px", textAlign: "center", fontFamily: "IBM Plex Mono,monospace", fontSize: 11,
-                      color: j === 4
-                        ? (v.startsWith("✅") ? T.goldd : v.startsWith("⚠️") ? "#C8A040" : "#804040")
-                        : (v.startsWith("✅") ? "#5A9E6A" : v.startsWith("⚠️") ? "#987830" : "#4A4040") }}>{v}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ padding: mob ? 20 : "26px 36px", background: "rgba(200,149,42,0.04)", border: `1px solid ${T.bdrg}`, borderRadius: 8 }}>
-          <PD size="17px" style={{ display: "block", fontWeight: 700, color: T.gold, marginBottom: 10 }}>The headline.</PD>
-          <p style={{ color: T.dim, fontSize: 15, lineHeight: 1.8, maxWidth: 780 }}>
-            Spintly's patented BLE Mesh and Apple Wallet first in India are genuinely world-class — no competitor has these. The product works and it works well. But the gaps in this table are not technology problems.
-            {" "}<span style={{ color: T.text }}>They are product prioritisation and execution problems. SOC2 is table stakes for US banking contracts. Anomaly detection is now a client procurement requirement, not a differentiator. Government certifications unlock the entire public sector in India. Every gap in this table is a product decision. That's exactly what I'm here to solve.</span>
-          </p>
-        </div>
-      </Sec>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <Sec id="numbers" bg={T.bg}>
-        <Label n="06">Impact in Numbers</Label>
-        <ST>Outcomes, <Au>not outputs.</Au></ST>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(3,1fr)", gap: mob ? "28px 18px" : "44px 40px", marginBottom: 48 }}>
-          {[
-            ["80K+","Active users","6 months from zero — Anacity commercial platform"],
-            ["100M+","Sq ft deployed","Across premium office parks India-wide"],
-            ["65%","Faster check-in","8 min → 2.8 min, 15 office parks, 1000+ daily entries"],
-            ["₹6Cr+","Revenue impact","Incremental contract value across 4 marquee clients"],
-            ["4","Marquee enterprise clients","Embassy REIT · KRT REIT · Brigade · MOSS Coworking"],
-            ["2.5yr","Spintly integration depth","15 office parks — owned from architecture to production"],
-          ].map(([n, l, s], i) => (
-            <div key={i}>
-              <MN style={{ fontSize: mob ? "clamp(32px,7vw,48px)" : "clamp(36px,4.5vw,58px)", fontWeight: 300, color: T.goldd, lineHeight: 1, display: "block", marginBottom: 10 }}>{n}</MN>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 5 }}>{l}</div>
-              <div style={{ fontSize: 12, color: "#4A4030", lineHeight: 1.5 }}>{s}</div>
-            </div>
+      <Card style={{ padding: mob ? 22 : "28px 36px" }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.dark, marginBottom: 12 }}>Spintly's patented BLE Mesh and Apple Wallet first-in-India are genuinely world-class — no competitor matches these.</div>
+        <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.8, maxWidth: 780, margin: 0 }}>
+          The gaps in this table are not technology problems.{" "}
+          <span style={{ color: C.dark, fontWeight: 500 }}>They are product prioritisation and execution problems. Every gap is a product decision.</span>
+        </p>
+      </Card>
+    </Sec>
+  );
+}
+
+function Numbers({ mob }) {
+  const metrics = [
+    { n: "80K+", label: "Active Users", sub: "6 months from zero — Anacity commercial platform" },
+    { n: "100M+", label: "Sq Ft Deployed", sub: "Across premium office parks India-wide" },
+    { n: "65%", label: "Faster Check-in", sub: "8 min → 2.8 min across 15 office parks, 1,000+ daily entries" },
+    { n: "4", label: "Marquee Enterprise Clients", sub: "Embassy REIT · KRT REIT · Brigade · MOSS Coworking" },
+    { n: "2.5yr", label: "Spintly Integration Depth", sub: "15 office parks — from architecture to production" },
+  ];
+
+  return (
+    <section id="numbers" style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #1A3E8C 100%)`, padding: mob ? "72px 24px" : "88px 0" }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: mob ? "0" : "0 24px" }}>
+        <Eyebrow color={C.orange}>06 / Outcomes at Scale</Eyebrow>
+        <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.white, marginBottom: 52, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+          Numbers that translate directly to Spintly's pipeline
+        </h2>
+
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(5,1fr)", gap: mob ? 20 : 16 }}>
+          {metrics.map((m, i) => (
+            <Card key={i} style={{ padding: mob ? 20 : 24, textAlign: "center" }}>
+              <div style={{ fontFamily: F.mono, fontSize: mob ? 28 : "clamp(28px,3vw,40px)", fontWeight: 700, color: C.navy, marginBottom: 8, lineHeight: 1 }}>{m.n}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.dark, marginBottom: 8 }}>{m.label}</div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{m.sub}</div>
+            </Card>
           ))}
         </div>
-        {two(
-          <div style={{ padding: mob ? 20 : 28, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}`, borderRadius: 8 }}>
-            <PD size="16px" style={{ display: "block", fontWeight: 700, marginBottom: 12, color: T.text }}>What these mean at Spintly specifically</PD>
-            <p style={{ color: T.dim, fontSize: 14, lineHeight: 1.78 }}>
-              80K users in 6 months maps to your 18-month growth target in half the time. The 0→1 execution playbook I ran for Anacity's commercial vertical is exactly what Spintly needs for colleges, hospitals, and regulated industries. The ₹6 Cr across 4 enterprise clients mirrors your NSI and bank pipeline profile exactly. And the 65% check-in improvement — that came from the same Spintly integration I own.
-            </p>
-          </div>,
-          <div style={{ padding: mob ? 20 : 28, background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}`, borderRadius: 8 }}>
-            <PD size="16px" style={{ display: "block", fontWeight: 700, marginBottom: 12, color: T.text }}>Tools I bring on day one</PD>
-            {["SQL + Python — I find friction in data before users report it", "Mixpanel, Power BI, Google Analytics — daily, not quarterly", "Figma, JIRA, Confluence — execution without ceremony", "RICE, MoSCoW, OKR — outcomes-driven prioritisation frameworks", "API and SDK integration ownership — technical feasibility is part of my brief, not separate from it"].map((t, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-                <span style={{ color: T.gold, fontSize: 11, marginTop: 3 }}>→</span>
-                <span style={{ color: T.dim, fontSize: 13, lineHeight: 1.6 }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Sec>
+      </div>
+    </section>
+  );
+}
 
-      <Sec id="journey" bg={T.bg2}>
-        <Label n="07">The Journey</Label>
-        <ST>Not a resume.<br /><Au>Three chapters.</Au></ST>
-        {[
-          { n: "01", title: "The Systems Thinker", period: "Suzlon Energy · Sep 2021 – Jul 2023 · Pune",
-            body: "Civil engineering teaches one thing above all else: systems fail at the edges. At Suzlon I built Python pipelines that saved the analytics team 15+ hours of manual work per week, redesigned data management across 4 project sites achieving 90% improvement in reporting accuracy, and shipped an internal resource planning MVP in just 6 weeks — with 40+ field engineers in UAT across a 200MW renewable energy portfolio. I wasn't called a PM. But defining requirements, bridging data and non-technical stakeholders, reducing operational friction at enterprise scale — that was exactly the job I was doing.",
-            hl: "80% reduction in manual reporting. 200-person engineering org. 6-week MVP shipped." },
-          { n: "02", title: "The Builder", period: "ANACITY by ANAROCK · Aug 2023 – Present · Bengaluru",
-            body: "When I joined Anacity, the commercial product didn't exist. I ran 25+ enterprise discovery interviews, defined the full platform roadmap, coordinated engineering and design, and shipped a product that hit 80K active users across 100M sq ft of premium office space within 6 months of launch. I then led enterprise customisation for 4 marquee clients — Embassy REIT, KRT REIT, Brigade, and MOSS Coworking — managing bespoke feature requirements, enterprise SLAs, and C-suite stakeholder alignment across all four simultaneously. No dedicated project manager. No mature PM framework. Four workstreams in parallel. ₹6 Cr in incremental contract value. Best Performer FY 24–25.",
-            hl: "0 → 80K active users. 0 → 100M sq ft. ₹6 Cr. 4 marquee clients. 6 months." },
-          { n: "03", title: "The Bridge", period: "The Spintly Chapter · 2023 – Present",
-            body: "Concurrently with building Anacity's commercial platform, I owned the complete Spintly integration across 15 office parks — from architecture understanding and BLE mesh device edge cases to production deployment and client escalation management. Nobody at Anacity understood how Spintly worked, except Ganesh and me. I fielded every access-denial anomaly, every missed unlock, every custom client requirement, every time a device firmware update broke an existing flow. That 2.5 years of outside-in depth — knowing where your product shines and exactly where it breaks — is what I'm bringing inside.",
-            hl: "The only person at Anacity who truly understood how Spintly behaved in production at scale." },
-        ].map((c, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "72px 1fr", gap: mob ? 0 : 40, marginBottom: 60, paddingBottom: 60, borderBottom: i < 2 ? `1px solid ${T.bdr}` : "none" }}>
-            {!mob && <PD size="64px" style={{ color: "rgba(255,255,255,0.04)", fontWeight: 900, fontStyle: "italic", lineHeight: 1 }}>{c.n}</PD>}
-            <div>
-              {mob && <MN style={{ fontSize: 22, fontWeight: 300, color: "rgba(255,255,255,0.05)", display: "block", marginBottom: 10 }}>{c.n}</MN>}
-              <MN style={{ fontSize: 10, color: "#3A3028", letterSpacing: "0.14em", display: "block", marginBottom: 10 }}>{c.period}</MN>
-              <PD size="22px" style={{ display: "block", fontWeight: 700, marginBottom: 14, color: T.text }}>{c.title}</PD>
-              <p style={{ color: T.dim, lineHeight: 1.84, fontSize: 15, marginBottom: 16 }}>{c.body}</p>
-              <div style={{ padding: "11px 16px", background: "rgba(200,149,42,0.06)", borderLeft: `2px solid ${T.gold}`, color: T.goldd, fontSize: 13, fontFamily: "IBM Plex Mono,monospace", lineHeight: 1.6 }}>{c.hl}</div>
-            </div>
-          </div>
-        ))}
-      </Sec>
+function Background({ mob }) {
+  const chapters = [
+    {
+      n: "01", tag: "The Systems Thinker",
+      period: "Suzlon Energy · Sep 2021 – Jul 2023 · Pune",
+      body: "At Suzlon Energy, Chirag built Python pipelines that saved the analytics team 15+ hours of manual work per week, redesigned data management across 4 project sites achieving 90% improvement in reporting accuracy, and shipped an internal resource planning MVP in 6 weeks — with 40+ field engineers in UAT across a 200MW renewable energy portfolio. The work was operational and data-heavy, but the discipline was product: defining requirements, bridging data and non-technical stakeholders, reducing friction at enterprise scale.",
+      hl: "80% reduction in manual reporting. 200-person engineering organisation. 6-week MVP shipped.",
+    },
+    {
+      n: "02", tag: "The Builder",
+      period: "ANACITY by ANAROCK · Aug 2023 – Present · Bengaluru",
+      body: "When Chirag joined Anacity, the commercial product did not exist. Chirag ran 25+ enterprise discovery interviews, defined the full platform roadmap, coordinated engineering and design, and shipped a product that reached 80K active users across 100M sq ft of premium office space within 6 months of launch. Chirag then led enterprise customisation for 4 marquee clients — Embassy REIT, KRT REIT, Brigade, and MOSS Coworking — managing bespoke feature requirements, enterprise SLAs, and C-suite stakeholder alignment across all four simultaneously.",
+      hl: "0 → 80K active users. 0 → 100M sq ft. 4 marquee clients. 6 months.",
+    },
+    {
+      n: "03", tag: "The Bridge",
+      period: "The Spintly Integration · 2023 – Present",
+      body: "Concurrently with building Anacity's commercial platform, Chirag owned the complete Spintly integration across 15 office parks — from understanding the BLE mesh architecture and device edge cases to production deployment and client escalation management. Chirag fielded every access-denial anomaly, every missed unlock, every custom client requirement, every firmware update that broke an existing flow. That 2.5 years of outside-in depth — knowing precisely where the product excels and where it breaks — is what this proposal brings inside.",
+      hl: "The only person at Anacity who truly understood how Spintly behaved in production at scale.",
+    },
+  ];
 
-      <Sec id="workstyle" bg={T.bg}>
-        <Label n="08">How I Work</Label>
-        <ST>Five principles.<br /><Au>Non-negotiable.</Au></ST>
-        {[
-          { t: "I ask why before I ask what.", b: "Every feature request, every integration requirement, every client ask gets interrogated before I commit to building anything. The problem as stated is almost never the actual problem. Shubhang saw this clearly — and it's exactly why this conversation started." },
-          { t: "I find friction in data before users report it.", b: "SQL and Python aren't resume line items — they're how I think. I built anomaly detection into my own product workflow at Anacity, finding broken onboarding flows before support tickets existed. At Spintly, I'll do the same thing with richer access data and more domain context." },
-          { t: "I communicate to reduce cognitive load, not add to it.", b: "PRDs, stakeholder updates, client briefs — everything I write is designed to make the next step obvious. A PM who creates confusion is the most expensive person in the room. Managing C-suite stakeholders at Embassy REIT and Brigade taught me that clarity is the product, not a soft skill on top of it." },
-          { t: "I protect engineering from noise.", b: "Good product managers create focus. I filter, prioritise, and sequence so the engineering team can build without context-switching. Managing 4 simultaneous enterprise workstreams with no dedicated project manager taught me this isn't something that happens automatically — it's a daily discipline." },
-          { t: "I think in outcomes, not outputs.", b: "The question is never 'did we ship it.' It's 'did it change anything.' 80K users, 65% faster check-in, ₹6 Cr revenue impact — those are outcomes. At Spintly, the outcomes I'm after are anomaly detection in production, new verticals in pipeline, integrations closing faster, and Series B metrics moving." },
-        ].map((item, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "40px 1fr", gap: mob ? 8 : 28, padding: "30px 0", borderBottom: `1px solid ${T.bdr}`, alignItems: "start" }}>
-            {!mob && <MN style={{ fontSize: 13, color: T.gold, paddingTop: 3 }}>{String(i + 1).padStart(2, "0")}.</MN>}
-            <div>
-              <PD size="18px" style={{ display: "block", fontWeight: 700, fontStyle: "italic", marginBottom: 10, color: T.text }}>{item.t}</PD>
-              <p style={{ color: T.dim, lineHeight: 1.78, fontSize: 15 }}>{item.b}</p>
-            </div>
+  return (
+    <Sec id="journey" bg={C.white}>
+      <Eyebrow>07 / Professional Background</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 52, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        Three chapters that built this perspective
+      </h2>
+
+      <div style={{ position: "relative" }}>
+        <div style={{ position: "absolute", left: mob ? 0 : 24, top: 8, bottom: 8, width: 3, background: `linear-gradient(to bottom, ${C.blue}, ${C.navy})`, borderRadius: 2 }} />
+        {chapters.map((c, i) => (
+          <div key={i} style={{
+            paddingLeft: mob ? 24 : 72, marginBottom: 56, paddingBottom: 56,
+            borderBottom: i < chapters.length - 1 ? `1px solid ${C.border}` : "none",
+            position: "relative",
+          }}>
+            <div style={{
+              position: "absolute", left: mob ? -5 : 15, top: 4,
+              width: 16, height: 16, borderRadius: "50%",
+              background: C.blue, border: `3px solid ${C.white}`,
+              boxShadow: `0 0 0 2px ${C.blue}`,
+            }} />
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 8 }}>{c.period}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.dark, marginBottom: 14 }}>{c.tag}</div>
+            <p style={{ color: C.muted, lineHeight: 1.84, fontSize: 15, marginBottom: 16 }}>{c.body}</p>
+            <div style={{
+              padding: "12px 18px", background: C.blueTint,
+              borderLeft: `3px solid ${C.blue}`, borderRadius: "0 8px 8px 0",
+              color: C.navy, fontSize: 13, fontFamily: F.mono, lineHeight: 1.6, fontWeight: 500,
+            }}>{c.hl}</div>
           </div>
         ))}
-      </Sec>
+      </div>
+    </Sec>
+  );
+}
 
-      <Sec id="proposition" bg={T.bg2}>
-        <Label n="09">The Proposition</Label>
-        <ST>What I bring.<br /><Au>What I need.</Au></ST>
-        {two(
+function Principles({ mob }) {
+  const items = [
+    { t: "Asks why before asking what.", b: "Every feature request, integration requirement, and client ask gets interrogated before committing to build anything. The problem as stated is almost never the actual problem." },
+    { t: "Finds friction in data before users report it.", b: "SQL and Python are not resume line items — they are how Chirag thinks. Anomaly detection was built into Anacity's own product workflow, finding broken onboarding flows before support tickets existed." },
+    { t: "Communicates to reduce cognitive load, not add to it.", b: "PRDs, stakeholder updates, client briefs — everything is designed to make the next step obvious. A PM who creates confusion is the most expensive person in the room." },
+    { t: "Protects engineering from noise.", b: "Good product managers create focus. Chirag filters, prioritises, and sequences so the engineering team can build without context-switching. Managing 4 simultaneous enterprise workstreams with no dedicated project manager required this as a daily discipline." },
+    { t: "Thinks in outcomes, not outputs.", b: "The question is never 'did we ship it.' It is 'did it change anything.' 80K users, 65% faster check-in — those are outcomes. At Spintly, the outcomes in scope are anomaly detection in production, new verticals in pipeline, integrations closing faster, and Series B metrics moving." },
+  ];
+
+  return (
+    <Sec id="principles" bg={C.altBg}>
+      <Eyebrow>08 / Working Principles</Eyebrow>
+      <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.dark, marginBottom: 52, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+        Five non-negotiables
+      </h2>
+
+      {items.map((item, i) => (
+        <div key={i} style={{
+          display: "grid", gridTemplateColumns: mob ? "1fr" : "56px 1fr", gap: mob ? 8 : 28,
+          padding: "28px 0", borderBottom: `1px solid ${C.border}`, alignItems: "start",
+        }}>
+          {!mob && (
+            <div style={{ fontFamily: F.mono, fontSize: 20, fontWeight: 700, color: C.blue, paddingTop: 2 }}>
+              {String(i + 1).padStart(2, "0")}.
+            </div>
+          )}
           <div>
-            <MN style={{ fontSize: 10, color: T.gold, letterSpacing: "0.22em", textTransform: "uppercase", display: "block", marginBottom: 22 }}>What I'm bringing in</MN>
-            {arrow([
-              "2.5 years of Spintly-specific domain depth — your API, BLE mesh edge cases, client pain, and product gaps — from 15 office parks",
-              "0→1 enterprise product execution at 80K+ user scale across 100M sq ft — in 6 months with no dedicated framework",
-              "AI-native product thinking shipped into production as a real operating layer, not a prototype or roadmap item",
-              "Enterprise client management from Embassy REIT to Brigade to KRT — C-suite alignment to ground-level delivery",
-              "Full-stack product sensibility: SQL, Python, Figma, JIRA, Mixpanel, Power BI — tools, not decorations",
-              "Competitor benchmarking depth showing exactly which gaps create the most urgency and which create the most revenue",
-              "The instinct to ask why, the patience to hear the real answer, and the speed to execute without waiting to be told",
-            ])}
-          </div>,
-          <div>
-            <MN style={{ fontSize: 10, color: T.dim, letterSpacing: "0.22em", textTransform: "uppercase", display: "block", marginBottom: 22 }}>What I'm looking for</MN>
-            {arrow([
-              "A product-first role with real integration ownership — not just coordination and status updates",
-              "Visibility at the top: CEO, CTO, Growth Officer — the role Shubhang described was specifically not below the Head of Product",
-              "Remote-first setup with cross-market exposure: India, US, and Middle East",
-              "Room to define what I own, not inherit someone else's fixed brief",
-              "A company in the Series A to B window — the best time in a company's life to build something that outlasts the funding cycle",
-              "People who are genuinely building, not just growing — Spintly's team energy is exactly what I was looking for",
-            ], "#3A3028")}
-          </div>
-        )}
-
-        <div style={{ marginTop: 40, padding: mob ? 22 : "28px 40px", background: "rgba(255,255,255,0.02)", border: `1px solid ${T.bdr}`, borderRadius: 8, marginBottom: 28 }}>
-          <PD size="17px" style={{ display: "block", fontWeight: 700, color: T.text, marginBottom: 14 }}>Why now. Why Spintly.</PD>
-          <p style={{ color: T.dim, fontSize: 15, lineHeight: 1.84, maxWidth: 780 }}>
-            Accel backed Spintly twice — seed round and series. They back companies like Flipkart and Swiggy. That's not a routine cheque — that's conviction in the team and the trajectory. The Growth Officer who just joined is a founder himself, with a previous company that also had Accel's backing. That says something about the calibre of people being brought in at the top.
-            {" "}The US channel partner network is just getting started — the Bangalore partner event was a first step, not a mature motion. The Middle East is paying 3-year upfront contracts but needs on-prem to unlock it fully. And NSI is closing tomorrow with banks and EV charging companies behind it.
-            {" "}<span style={{ color: T.text }}>Shubhang didn't call me because there was an open role. He called me because he knows what I can do. I've seen Spintly's product from the outside for 2.5 years. I know what it can become. I'm done watching from the outside.</span>
-          </p>
-        </div>
-
-        <div style={{ padding: mob ? "32px 20px" : "52px 60px", border: `1px solid ${T.bdrg}`, background: "rgba(200,149,42,0.03)", borderRadius: 8, textAlign: "center" }}>
-          <PD size={mob ? "26px" : "clamp(26px,3.5vw,44px)"} style={{ display: "block", fontWeight: 900, lineHeight: 1.12, marginBottom: 14, color: T.text }}>
-            Let's build something<br /><Au>that actually matters.</Au>
-          </PD>
-          <p style={{ color: T.dim, fontSize: 15, marginBottom: 32, lineHeight: 1.7 }}>
-            The next step is a conversation with the CEO, CTO, and the Growth Officer.<br />I'm ready when Spintly is.
-          </p>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="mailto:chirag.mewara.18@gmail.com" style={{ background: T.gold, color: "#080808", padding: mob ? "12px 18px" : "13px 26px", fontFamily: "IBM Plex Mono,monospace", fontSize: 12, fontWeight: 600, letterSpacing: "0.07em", borderRadius: 6, textDecoration: "none" }}>
-              chirag.mewara.18@gmail.com
-            </a>
-            <a href="tel:+919079981978" style={{ background: "transparent", color: T.text, padding: mob ? "12px 18px" : "13px 26px", fontFamily: "IBM Plex Mono,monospace", fontSize: 12, letterSpacing: "0.07em", border: `1px solid ${T.bdr}`, borderRadius: 6, textDecoration: "none" }}>
-              +91 90799 81978
-            </a>
+            {mob && <div style={{ fontFamily: F.mono, fontSize: 13, color: C.blue, marginBottom: 6 }}>{String(i + 1).padStart(2, "0")}.</div>}
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.dark, marginBottom: 10, lineHeight: 1.35 }}>{item.t}</div>
+            <p style={{ color: C.muted, lineHeight: 1.78, fontSize: 15, margin: 0 }}>{item.b}</p>
           </div>
         </div>
+      ))}
+    </Sec>
+  );
+}
 
-        <div style={{ marginTop: 44, paddingTop: 24, borderTop: `1px solid ${T.bdr}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <MN style={{ fontSize: 10, color: "#20201A" }}>CHIRAG MEWARA × SPINTLY · 2025</MN>
-          <MN style={{ fontSize: 10, color: "#20201A" }}>BUILT WITH INTENT. NOT JUST INTEREST.</MN>
+function Proposition({ mob }) {
+  const brings = [
+    "2.5 years of Spintly-specific domain depth — API behaviour, BLE mesh edge cases, client pain, and product gaps — from 15 office parks in production",
+    "0→1 enterprise product execution at 80K+ user scale across 100M sq ft — in 6 months with no dedicated PM framework",
+    "AI shipped as a production operating layer — not a demo, not a pilot, but intelligence that replaced a 3-person support function",
+    "Enterprise client management from Embassy REIT to Brigade — C-suite alignment to ground-level delivery",
+    "Full-stack product sensibility: SQL, Python, Figma, JIRA, Mixpanel, Power BI",
+    "Competitor benchmarking depth identifying exactly which gaps create the most revenue urgency",
+  ];
+  const requires = [
+    "A product-first remit with real integration ownership — not coordination and status updates",
+    "Reporting visibility to senior leadership — specifically not below Head of Product level",
+    "Remote-first setup with cross-market exposure: India, US, and Middle East",
+    "Room to define scope rather than inherit a fixed brief",
+    "The Series A-to-B window — the best time to build something that outlasts the funding cycle",
+    "A team that is genuinely building, not just growing",
+  ];
+
+  return (
+    <section id="proposition" style={{ background: C.navy, padding: mob ? "72px 24px" : "88px 0" }}>
+      <div style={{ maxWidth: 1140, margin: "0 auto", padding: mob ? "0" : "0 24px" }}>
+        <Eyebrow color={C.orange}>09 / The Proposition</Eyebrow>
+        <h2 style={{ fontSize: mob ? "clamp(26px,6vw,36px)" : "clamp(30px,4vw,48px)", fontWeight: 800, color: C.white, marginBottom: 52, lineHeight: 1.12, letterSpacing: "-0.02em" }}>
+          What this partnership looks like
+        </h2>
+
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 32, marginBottom: 40 }}>
+          <Card style={{ padding: mob ? 24 : 32 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.blue, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20 }}>What Chirag Brings</div>
+            {brings.map((t, i) => <Bullet key={i} color={C.blue}>{t}</Bullet>)}
+          </Card>
+          <Card style={{ padding: mob ? 24 : 32, background: C.altBg }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.muted, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20 }}>What the Role Requires</div>
+            {requires.map((t, i) => <Bullet key={i} color={C.muted}>{t}</Bullet>)}
+          </Card>
         </div>
-      </Sec>
+
+        <Card style={{ padding: mob ? 24 : "32px 40px", marginBottom: 40 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.dark, marginBottom: 14 }}>Why This Moment</div>
+          <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.84, maxWidth: 780, margin: 0 }}>
+            Accel backed Spintly at seed and again at series. The Growth Officer recently placed is a founder with Accel backing of their own — a signal about the calibre of leadership being assembled at the top. The US channel partner motion is in its early stages. The Middle East is paying 3-year upfront contracts but needs on-prem to unlock fully. NSI and banks are in the integration pipeline.{" "}
+            <span style={{ color: C.dark, fontWeight: 500 }}>The next Product hire is not a mid-level PM managing tickets — it is the person who owns the integrations, the AI layer, and the vertical expansion that gets Spintly to Series B. That is what this proposal is.</span>
+          </p>
+        </Card>
+
+        <div style={{
+          borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.05)", padding: mob ? "36px 24px" : "56px 60px",
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: mob ? 28 : "clamp(28px,4vw,44px)", fontWeight: 800, color: C.white, lineHeight: 1.12, marginBottom: 14, letterSpacing: "-0.02em" }}>
+            Let's build something that actually matters.
+          </div>
+          <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 15, marginBottom: 36, lineHeight: 1.7 }}>
+            Reach out directly to start the conversation.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <a href="mailto:chirag.mewara.18@gmail.com" style={{
+              background: C.blue, color: C.white,
+              padding: mob ? "12px 18px" : "14px 28px",
+              fontFamily: F.mono, fontSize: 12, fontWeight: 600,
+              letterSpacing: "0.06em", borderRadius: 8, textDecoration: "none",
+            }}>chirag.mewara.18@gmail.com</a>
+            <a href="tel:+919079981978" style={{
+              background: "transparent", color: C.white,
+              padding: mob ? "12px 18px" : "14px 28px",
+              fontFamily: F.mono, fontSize: 12, letterSpacing: "0.06em",
+              border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, textDecoration: "none",
+            }}>+91 90799 81978</a>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>CHIRAG MEWARA × SPINTLY · 2025</span>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>BUILT WITH INTENT.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Portfolio({ role }) {
+  const w = useW(); const mob = w < 680;
+  const isAdmin = role === "admin";
+
+  return (
+    <div style={{ background: C.white, fontFamily: F.sans, color: C.dark }}>
+      <Nav isAdmin={isAdmin} />
+      <Hero mob={mob} />
+      <Snapshot mob={mob} />
+      <Gaps mob={mob} />
+      <AIVision mob={mob} />
+      <RoleModel mob={mob} />
+      <Benchmark mob={mob} />
+      <Numbers mob={mob} />
+      <Background mob={mob} />
+      <Principles mob={mob} />
+      <Proposition mob={mob} />
     </div>
   );
 }
 
 export default function App() {
-  const [screen, setScreen] = useState("login");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [users, setUsers] = useState([]);
+  const [screen, setScreen] = useState("loading");
+  const [role, setRole] = useState(null);
 
   useEffect(() => {
-    let magic = null;
-    const hash = window.location.hash;
-    if (hash.startsWith("#key=")) {
-      try { magic = JSON.parse(atob(hash.slice(5))); } catch (_) {}
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    db.load().then(loaded => {
-      setUsers(loaded);
-      if (!magic) return;
-      const { e, p } = magic;
-      if (e === ADMIN_EMAIL && p === ADMIN_PASSWORD) {
-        setIsAdmin(true); setScreen("portfolio"); return;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        const session = JSON.parse(raw);
+        if (session && session.role) {
+          setRole(session.role);
+          setScreen("portfolio");
+          return;
+        }
       }
-      let target = loaded.find(u => u.email === e && u.password === p);
-      if (!target) {
-        const up = [...loaded.filter(u => u.email !== e), { email: e, password: p, created: new Date().toISOString(), last: null }];
-        db.save(up); setUsers(up);
-      }
-      setIsAdmin(false); setScreen("portfolio");
-    });
+    } catch (_) {}
+    setScreen("login");
   }, []);
 
-  function handleLogin(email, password) {
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      setIsAdmin(true); setScreen("portfolio"); return { ok: true };
-    }
-    const found = mem.find(u => u.email === email && u.password === password);
-    if (found) {
-      const up = mem.map(u => u.email === email ? { ...u, last: new Date().toISOString() } : u);
-      db.save(up); setUsers([...up]);
-      setIsAdmin(false); setScreen("portfolio"); return { ok: true };
-    }
-    return { ok: false, msg: "Invalid credentials. Contact Chirag for access." };
+  function handleLogin(userRole) {
+    setRole(userRole);
+    setScreen("portfolio");
   }
 
-  async function handleAdd(email) {
-    const pw = genPw();
-    const up = [...mem.filter(u => u.email !== email), { email, password: pw, created: new Date().toISOString(), last: null }];
-    await db.save(up); setUsers([...up]); return { pw };
-  }
-
-  async function handleRevoke(email) {
-    const up = mem.filter(u => u.email !== email);
-    await db.save(up); setUsers([...up]);
-  }
+  if (screen === "loading") return (
+    <div style={{ minHeight: "100vh", background: C.navy, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontFamily: F.mono, fontSize: 12, color: "rgba(255,255,255,0.4)", letterSpacing: "0.2em" }}>LOADING…</div>
+    </div>
+  );
 
   if (screen === "login") return <Login onLogin={handleLogin} />;
 
-  return (
-    <Portfolio
-      isAdmin={isAdmin} showAdmin={showAdmin}
-      onAdmin={() => setShowAdmin(true)} onCloseAdmin={() => setShowAdmin(false)}
-      users={users} onAdd={handleAdd} onRevoke={handleRevoke}
-    />
-  );
+  return <Portfolio role={role} />;
 }
